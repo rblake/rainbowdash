@@ -1,5 +1,9 @@
 #include "Animation.h"
-#include <WProgram.h>
+#if defined(ARDUINO) && ARDUINO >= 100
+#  include <Arduino.h>
+#else 
+#  include <WProgram.h>
+#endif
 
 static unsigned char animation_info[4][ANIMATION_COUNT];
 static unsigned char animation_data[256];

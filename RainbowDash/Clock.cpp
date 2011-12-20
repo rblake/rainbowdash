@@ -1,5 +1,9 @@
 #include "Clock.h"
-#include <WProgram.h>
+#if defined(ARDUINO) && ARDUINO >= 100
+#  include <Arduino.h>
+#else 
+#  include <WProgram.h>
+#endif
 
 #define MSEC_PER_DAY 86400000
 #define TICK_PER_DAY 5184000

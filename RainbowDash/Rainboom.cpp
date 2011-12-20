@@ -6,7 +6,11 @@
 #include "Palettes.h"
 #include "Fonts.h"
 #include <avr/pgmspace.h>
-#include <WProgram.h>
+#if defined(ARDUINO) && ARDUINO >= 100
+#  include <Arduino.h>
+#else 
+#  include <WProgram.h>
+#endif
 
 // Calculating Colors
 
