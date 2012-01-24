@@ -6,6 +6,7 @@
 #include "Clock.h"
 #include "RegisterFile.h"
 #include "Animation.h"
+#include "Global.h"
 #include <avr/pgmspace.h>
 
 static void draw_image_wrapped(unsigned char * buffer, signed char col, signed char row, unsigned char pic) {
@@ -460,6 +461,15 @@ void do_short_command(
 		(*display_whichbuf) = working_which;
 		(*working_whichbuf) = display_which;
 		break;
+        case CM_IDENTIFY:
+		set_all_color(working_buf, 0, 0, 0, 0);
+                draw_char_4x4(working_buf, 0, 0, g_my_name, 0xFF, 0xFF, 0xFF);
+                draw_char_4x4(working_buf, 4, 2, g_my_id+'0', 0xFF, 0xFF, 0xFF);
+		//draw_char_8x8(working_buf, shift, 0, index, r, g, b);
+		video_set_next_buffer(working_buf);
+		(*display_whichbuf) = working_which;
+		(*working_whichbuf) = display_which;
+		break;
 	case CM_SHOW_COLOR:
 		set_all_color(working_buf, 0, r, g, b);
 		video_set_next_buffer(working_buf);
@@ -747,7 +757,7 @@ void do_long_command(
 	case CM_DRAW_CHAR_4x4:
 		draw_char_4x4(working_buf, x, y, z, r, g, b);
 		break;
-	case CM_SET_ALL_COLOR:
+        case CM_SET_ALL_COLOR:
 		set_all_color(working_buf, z, r, g, b);
 		break;
 	case CM_SET_ROW_COLOR:

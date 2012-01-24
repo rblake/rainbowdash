@@ -61,6 +61,8 @@
 #define CM_DRAW_CHAR_ROW      46
 #define CM_DRAW_CHAR_COLUMN   47
 
+#define CM_IDENTIFY           70
+
 void do_short_command(
 		unsigned char * buffers,
 		unsigned char * display_whichbuf,
