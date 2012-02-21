@@ -285,10 +285,13 @@ ECHO    = echo
 
 # General arguments
 SYS_LIBS      = $(foreach LPATH, $(ARDUINO_LIB_PATH), $(patsubst %,$(LPATH)/%,$(ARDUINO_LIBS)) )
+SYS_LIBS     += $(foreach LPATH, $(ARDUINO_LIB_PATH), $(patsubst %,$(LPATH)/%/utility,$(ARDUINO_LIBS)) )
 SYS_INCLUDES  = $(patsubst %,-I%,$(SYS_LIBS))
 SYS_OBJS      = $(wildcard $(patsubst %,%/*.o,$(SYS_LIBS)))
 LIB_SRC       = $(wildcard $(patsubst %,%/*.cpp,$(SYS_LIBS)))
+LIB_SRC      += $(wildcard $(patsubst %,%/*.c,$(SYS_LIBS)))
 LIB_OBJS      = $(filter %.o, $(foreach LPATH, $(ARDUINO_LIB_PATH), $(patsubst $(LPATH)/%.cpp,$(OBJDIR)/libs/%.o,$(LIB_SRC)) ) )
+LIB_OBJS     += $(filter %.o, $(foreach LPATH, $(ARDUINO_LIB_PATH), $(patsubst $(LPATH)/%.c,$(OBJDIR)/libs/%.o,$(LIB_SRC)) ) )
 
 CPPFLAGS      = -DARDUINO=$(ARDUINO_VERSION) -mmcu=$(MCU) -DF_CPU=$(F_CPU) \
 			-I. -I$(ARDUINO_PIN_PATH) -I$(ARDUINO_CORE_PATH) \
