@@ -2,6 +2,7 @@
 #include "Rainbow.h"
 #include "Commands.h"
 #include "Clock.h"
+#include "Wire.h"
 #include <avr/pgmspace.h>
 
 unsigned char buffer[2][256] = {
@@ -80,48 +81,152 @@ unsigned char working_whichbuf = 1;
 unsigned char cmdbuf[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 unsigned char bufpos = 0;
 
+void onMasterReceive(int numbytes);
+
+
+//Do not increase above 128, bad things happen. I don't know why.
+#define BUFF_SIZE 128
+
+//Warning!  This class needs locks or bad things will happen.
+//I should know how to do that, but I dont.
+class Comm_type {
+public:
+  void begin() {
+    myid = 0;
+    head=tail=0;
+    if (myid==0) {
+      Serial.begin(9600);
+      Wire.begin();
+    } else {
+      Wire.begin(myid);
+      Wire.onReceive(onMasterReceive);
+    }
+  }
+  byte available() {
+    if (myid==0) {
+      return Serial.available();
+    } else {
+      int diff = tail-head;
+      if (diff<0) diff += BUFF_SIZE;
+      return diff;
+    }
+  }
+  byte read() {
+    if (myid==0) {
+      return Serial.read();
+    } else {
+      do {} while (head == tail);
+      byte ret = circlebuff[head];
+      head = (head+1) % BUFF_SIZE;
+      return ret;
+    }
+  }
+  void sendto(byte id, const byte* buff, int size) {
+    Wire.beginTransmission(id);
+    for (int ii=0; ii<size; ii++) {
+      Wire.write(buff[ii]);
+    }
+    Wire.endTransmission();
+  }
+  friend void onMasterRecieve(int numbytes);
+  byte id() {
+    return myid;
+  }
+
+  byte myid;
+  byte circlebuff[BUFF_SIZE];
+  byte head;
+  byte tail;
+
+  
+};
+Comm_type Comm;
+
+void onMasterReceive(int numbytes) {
+   while (Wire.available()) {
+    Comm.circlebuff[Comm.tail] = Wire.read();
+    Comm.tail = (Comm.tail+1) % BUFF_SIZE;
+  }
+}
+
 void setup() {
 	video_set_buffer(buffer[0]);
 	video_setup();
-	Serial.begin(9600);
+	Comm.begin();
+	if (0) {
+	  unsigned char xxxbuf[8];
+	  xxxbuf[0] = 'R';
+	  xxxbuf[1] = 0x03;
+	  xxxbuf[2] = 0x0F;
+	  xxxbuf[3] = 0xFF;
+	  xxxbuf[4] = 0x00;
+	  do_short_command(buffer[0], &display_whichbuf, &working_whichbuf, 2, xxxbuf); 
+	}
 }
+
 
 void loop() {
 	video_loop();
 	if (!cmdbuf[0]) {
-		if (Serial.available() > 0) {
-			cmdbuf[0] = Serial.read();
+		if (Comm.available() > 0) {
+			cmdbuf[0] = Comm.read();
 			bufpos = 0;
 		}
 	}
 	if (cmdbuf[0]) {
 		switch (cmdbuf[0]) {
 		case 'R':
-			if (Serial.available() >= 4) {
-				cmdbuf[1] = Serial.read();
-				cmdbuf[2] = Serial.read();
-				cmdbuf[3] = Serial.read();
-				cmdbuf[4] = Serial.read();
-				do_short_command(buffer[0], &display_whichbuf, &working_whichbuf, 2, cmdbuf);
+		case 'S':
+		case 'T':
+		case 'U':
+		case 'V':
+		case 'W':
+		case 'X':
+		case 'Y':
+			if (Comm.available() >= 4) {
+				cmdbuf[1] = Comm.read();
+				cmdbuf[2] = Comm.read();
+				cmdbuf[3] = Comm.read();
+				cmdbuf[4] = Comm.read();
+				int id = cmdbuf[0]-'R';
+				if (Comm.id()==0 && id!=Comm.id()) {
+				  Comm.sendto(id, cmdbuf, 5);
+				} 
+				if (id==Comm.id()) { 
+				  do_short_command(buffer[0], &display_whichbuf, &working_whichbuf, 2, cmdbuf); 
+				}				  
 				cmdbuf[0] = 0;
 			}
 			break;
 		case 'r':
-			if (Serial.available() >= 7) {
-				cmdbuf[1] = Serial.read();
-				cmdbuf[2] = Serial.read();
-				cmdbuf[3] = Serial.read();
-				cmdbuf[4] = Serial.read();
-				cmdbuf[5] = Serial.read();
-				cmdbuf[6] = Serial.read();
-				cmdbuf[7] = Serial.read();
-				do_long_command(buffer[0], &display_whichbuf, &working_whichbuf, 2, cmdbuf);
+		case 's':
+		case 't':
+		case 'u':
+		case 'v':
+		case 'w':
+		case 'x':
+		case 'y':
+			if (Comm.available() >= 7) {
+				cmdbuf[1] = Comm.read();
+				cmdbuf[2] = Comm.read();
+				cmdbuf[3] = Comm.read();
+				cmdbuf[4] = Comm.read();
+				cmdbuf[5] = Comm.read();
+				cmdbuf[6] = Comm.read();
+				cmdbuf[7] = Comm.read();
+				int id = cmdbuf[0]-'r';
+				if (Comm.id()==0 && id!=Comm.id()) {
+				  Comm.sendto(id, cmdbuf, 8);
+				} 
+				if (id==Comm.id()) { 
+				  do_long_command(buffer[0], &display_whichbuf, &working_whichbuf, 2, cmdbuf);
+				}
 				cmdbuf[0] = 0;
 			}
 			break;
 		case 'D':
-			while (Serial.available() > 0) {
-				unsigned char i = Serial.read();
+			while (Comm.available() > 0) {
+				unsigned char i = Comm.read();
 				if (bufpos < 32) {
 					buffer[working_whichbuf][((bufpos & 0x1F) << 1)] = 0;
 					buffer[working_whichbuf][((bufpos & 0x1F) << 1) | 1] = 0;
@@ -145,8 +250,8 @@ void loop() {
 			}
 			break;
 		case 'd':
-			while (Serial.available() > 0) {
-				buffer[working_whichbuf][bufpos++] = Serial.read();
+			while (Comm.available() > 0) {
+				buffer[working_whichbuf][bufpos++] = Comm.read();
 				if (!bufpos) {
 					video_set_next_buffer(buffer[working_whichbuf]);
 					display_whichbuf = working_whichbuf;
@@ -157,17 +262,17 @@ void loop() {
 			}
 			break;
 		case 0xD3:
-			if (Serial.available() >= 8) {
+			if (Comm.available() >= 8) {
 				signed long days = 0;
 				signed long msec = 0;
-				days <<= 8; days |= (unsigned char)Serial.read();
-				days <<= 8; days |= (unsigned char)Serial.read();
-				days <<= 8; days |= (unsigned char)Serial.read();
-				days <<= 8; days |= (unsigned char)Serial.read();
-				msec <<= 8; msec |= (unsigned char)Serial.read();
-				msec <<= 8; msec |= (unsigned char)Serial.read();
-				msec <<= 8; msec |= (unsigned char)Serial.read();
-				msec <<= 8; msec |= (unsigned char)Serial.read();
+				days <<= 8; days |= (unsigned char)Comm.read();
+				days <<= 8; days |= (unsigned char)Comm.read();
+				days <<= 8; days |= (unsigned char)Comm.read();
+				days <<= 8; days |= (unsigned char)Comm.read();
+				msec <<= 8; msec |= (unsigned char)Comm.read();
+				msec <<= 8; msec |= (unsigned char)Comm.read();
+				msec <<= 8; msec |= (unsigned char)Comm.read();
+				msec <<= 8; msec |= (unsigned char)Comm.read();
 				set_clock(days, msec, 0, 0);
 				Serial.write('O');
 				Serial.write('K');
@@ -175,10 +280,10 @@ void loop() {
 			}
 			break;
 		case 0xC7:
-			if (Serial.available() >= 1) {
+			if (Comm.available() >= 1) {
 				signed long days;
 				signed long msec;
-				Serial.read();
+				Comm.read();
 				days = get_clock_hi(1);
 				msec = get_clock_lo(0);
 				Serial.write('O');
@@ -195,8 +300,8 @@ void loop() {
 			}
 			break;
 		case 0xFD:
-			if (Serial.available() >= 1) {
-				unsigned char times = Serial.read();
+			if (Comm.available() >= 1) {
+				unsigned char times = Comm.read();
 				if (times) {
 					while (times-->0) {
 						Serial.write("RainbowDashboard 1.0\n(c) Kreative Software\n");
